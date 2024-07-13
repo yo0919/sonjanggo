@@ -1,0 +1,48 @@
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+  DOCKER_HOST: tcp://docker:2375/
+  GITHUB_REPO: "yongho/sonjanggo"
+
+before_script:
+  - apk add --no-cache git
+  - git config --global user.email "0919yo@naver.com"
+  - git config --global user.name "yo0919"
+  - git clone https://$GITHUB_TOKEN@github.com/$GITHUB_REPO.git .
+
+build:
+  stage: build
+  image: maven:3.6.3-jdk-11
+  script:
+    - mvn clean package
+
+test:
+  stage: test
+  image: maven:3.6.3-jdk-11
+  script:
+    - mvn test
+
+build_image:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker build -t jeonyongho/sonjanggo:latest .
+    - echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+    - docker push jeonyongho/sonjanggo:latest
+  only:
+    - main
+
+deploy:
+  stage: deploy
+  image: appleboy/drone-ssh
+  script:
+    - ssh -o StrictHostKeyChecking=no ubuntu@$EC2_HOST "cd /home/ubuntu/sonjanggo && docker-compose pull && docker-compose up -d --build"
+  only:
+    - main
